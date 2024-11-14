@@ -1,17 +1,20 @@
 <?php
-require_once '../Charge.php';
+include_once 'Charge.php';
 
 class ChargeController {
-    public function creerChargeFixe($nom, $montant) {
-        return new ChargeFixe($nom, $montant);
+    private $conn;
+
+    public function __construct($db) {
+        $this->conn = $db;
     }
 
-    public function creerChargeVariable($nom, $montant, $tauxReduction) {
-        return new ChargeVariable($nom, $montant, $tauxReduction);
-    }
-
-    public function calculerMontantApresReduction($charge) {
-        return $charge->calculerMontantApresReduction();
+    public function ajouterCharge($description, $montant, $date, $variable) {
+        $charge = new Charge($this->conn);
+        $charge->description = $description;
+        $charge->montant = $montant;
+        $charge->date = $date;
+        $charge->variable = $variable;
+        return $charge->save();
     }
 }
 ?>

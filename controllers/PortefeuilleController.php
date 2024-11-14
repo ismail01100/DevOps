@@ -1,23 +1,24 @@
 <?php
-require_once '../Portefeuille.php';
+include_once 'Portefeuille.php';
 
 class PortefeuilleController {
-    private $portefeuille;
+    private $conn;
 
-    public function __construct() {
-        $this->portefeuille = new Portefeuille();
+    public function __construct($db) {
+        $this->conn = $db;
     }
 
-    public function ajouterCharge($charge) {
-        $this->portefeuille->ajouterCharge($charge);
-    }
+    public function consulterPortefeuille() {
+        $portefeuille = new Portefeuille($this->conn);
+        $totalCharges = $portefeuille->calculerTotalCharges();
+        $reste = $portefeuille->calculerReste();
+        $tauxReduction = $portefeuille->suggererReduction();
 
-    public function calculerTotalCharges() {
-        return $this->portefeuille->calculerTotalCharges();
-    }
-
-    public function obtenirPortefeuille() {
-        return $this->portefeuille;
+        return [
+            'totalCharges' => $totalCharges,
+            'reste' => $reste,
+            'tauxReduction' => $tauxReduction
+        ];
     }
 }
 ?>

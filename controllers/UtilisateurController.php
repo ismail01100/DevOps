@@ -1,27 +1,22 @@
 <?php
-require_once '../Utilisateur.php';
+include_once 'Utilisateur.php';
 
 class UtilisateurController {
-    private $utilisateur;
+    private $conn;
 
-    public function __construct($id, $nom, $email, $salaire) {
-        $this->utilisateur = new Utilisateur($id, $nom, $email, $salaire);
+    public function __construct($db) {
+        $this->conn = $db;
     }
 
-    public function ajouterPortefeuille($portefeuille) {
-        $this->utilisateur->ajouterPortefeuille($portefeuille);
-    }
-
-    public function afficherPortefeuilles() {
-        return $this->utilisateur->consulterPortefeuilles();
-    }
-
-    public function getDetailsUtilisateur() {
-        return [
-            'nom' => $this->utilisateur->getNom(),
-            'email' => $this->utilisateur->getEmail(),
-            'salaire' => $this->utilisateur->getSalaire(),
-        ];
+    public function getUserProfile() {
+        // Assuming the user is already logged in and user ID is set in the session
+        session_start();
+        if (isset($_SESSION['user_id'])) {
+            $user = new Utilisateur($this->conn);
+            $user->id = $_SESSION['user_id'];
+            return $user->getProfile();
+        }
+        return null;
     }
 }
 ?>
