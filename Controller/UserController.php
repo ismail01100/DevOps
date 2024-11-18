@@ -3,9 +3,11 @@ require_once 'Model/User.php';
 require_once 'Model/DatabaseConnection.php';
 class UserController {
     private $db;
+    private $isTestMode;
     
-    public function __construct() {
+    public function __construct($isTestMode = false) {
         $this->db = DatabaseConnection::getInstance()->getConnection();
+        $this->isTestMode = $isTestMode;
     }
 
     public function login($email, $password) {
@@ -13,7 +15,9 @@ class UserController {
             // Validate inputs
             if (empty($email) || empty($password)) {
                 $_SESSION['error'] = "Email and password are required";
-                require 'View/user/login.php';
+                if (!$this->isTestMode) {
+                    require 'View/user/login.php';
+                }
                 return;
             }
 
@@ -21,19 +25,27 @@ class UserController {
             $stmt->execute([':email' => $email]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            // Use password_verify instead of md5
             if ($user && password_verify($password, $user['Password'])) {
                 $_SESSION['user'] = $user;
-                header('Location: index.php?controller=portefeuille&action=index');
-                exit(); // Add exit after redirect
+                if (!$this->isTestMode) {
+                    header('Location: index.php?controller=portefeuille&action=index');
+                    exit();
+                }
+                return true;
             } else {
                 $_SESSION['error'] = "Invalid email or password";
-                require 'View/user/login.php';
+                if (!$this->isTestMode) {
+                    require 'View/user/login.php';
+                }
+                return false;
             }
         } catch(PDOException $e) {
             error_log("Login error: " . $e->getMessage());
             $_SESSION['error'] = "An error occurred during login";
-            require 'View/user/login.php';
+            if (!$this->isTestMode) {
+                require 'View/user/login.php';
+            }
+            return false;
         }
     }
 
@@ -42,8 +54,10 @@ class UserController {
             // Validate inputs
             if (empty($data['Email']) || empty($data['Password']) || empty($data['Fullname'])) {
                 $_SESSION['error'] = "All fields are required";
-                require 'View/user/register.php';
-                return;
+                if (!$this->isTestMode) {
+                    require 'View/user/register.php';
+                }
+                return false;
             }
 
             // Hash password properly
@@ -57,12 +71,18 @@ class UserController {
             ]);
             
             $_SESSION['success'] = "Registration successful. Please login.";
-            header('Location: index.php?controller=user&action=login');
-            exit(); // Add exit after redirect
+            if (!$this->isTestMode) {
+                header('Location: index.php?controller=user&action=login');
+                exit();
+            }
+            return true;
         } catch(PDOException $e) {
             error_log("Registration error: " . $e->getMessage());
             $_SESSION['error'] = "An error occurred during registration";
-            require 'View/user/register.php';
+            if (!$this->isTestMode) {
+                require 'View/user/register.php';
+            }
+            return false;
         }
     }
 

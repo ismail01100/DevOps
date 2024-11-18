@@ -1,0 +1,33 @@
+# Use PHP 8.2 with Apache
+FROM php:8.2-apache
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    libzip-dev \
+    default-mysql-client
+
+# Install PHP extensions
+RUN docker-php-ext-install \
+    pdo_mysql \
+    zip
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Copy the entire application first
+COPY . .
+
+# Install dependencies as non-root user
+RUN chown -R www-data:www-data /var/www/html \
+    && su www-data -s /bin/sh -c "composer install --prefer-dist --no-interaction --optimize-autoloader"
+
+# Make the test script executable
+RUN chmod +x run-tests.sh
+
+# Set the default command (though this will be overridden by docker-compose)
+CMD ["./run-tests.sh"]
