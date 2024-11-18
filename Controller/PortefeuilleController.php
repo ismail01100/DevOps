@@ -76,7 +76,7 @@ class PortefeuilleController {
                     $difference = $data['Salaire'] - $oldSalaire;
                 }else{
                     $difference = $data['Salaire'];
-                    $stmt = $this->db->prepare("UPDATE portefeuille SET balance = :salaire WHERE CodePortefeuille = :id");
+                    $stmt = $this->db->prepare("UPDATE portefeuille SET Solde = :salaire WHERE CodePortefeuille = :id");
                     $stmt->execute([
                         ':salaire' => $data['Salaire'],
                         ':id' => $_SESSION['user']['CodePortefeuille']
