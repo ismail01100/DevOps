@@ -65,5 +65,11 @@ class UserController {
             require 'View/user/register.php';
         }
     }
+
+    public function logout() {
+        unset($_SESSION['user']);
+        header('Location: index.php?controller=user&action=login');
+        exit();
+    }
 }
 ?>

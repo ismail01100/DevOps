@@ -10,12 +10,18 @@ require_once 'Controller/PortefeuilleController.php';
 $controller = isset($_GET['controller']) ? $_GET['controller'] : 'user';
 $action = isset($_GET['action']) ? $_GET['action'] : 'login';
 
+// Verify user connection for protected controllers
+if (($controller == 'charges' || $controller == 'portefeuille') && !isset($_SESSION['user']['CodeUtilisateur'])) {
+    header('Location: index.php?controller=user&action=login');
+    exit();
+}
+
 // Route to appropriate controller
 switch($controller) {
     case 'user':
         $controller = new UserController();
         if($action == 'login') {
-            if(isset($_SESSION['user'])) {
+            if(isset($_SESSION['user']['CodeUtilisateur'])) {
                 header('Location: index.php?controller=portefeuille&action=index');
                 exit();
             }
@@ -30,6 +36,8 @@ switch($controller) {
             } else {
                 require 'View/user/register.php';
             }
+        } elseif($action == 'logout') {
+            $controller->logout();
         }
         break;
         

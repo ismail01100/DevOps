@@ -32,21 +32,30 @@ class ChargesController {
                 ':dateCharge' => $data['DateCharge'],
                 ':variable' => $data['Variable']
             ]);
-            $stmt = $this->db->prepare("UPDATE portefeuille SET Solde = Solde - :montant WHERE CodePortefeuille = :codePortefeuille");
-            $stmt->execute([
-                ':montant' => $data['Montant'],
-                ':codePortefeuille' => $data['CodePortefeuille']
-            ]);
+            $this->updateBalance();
             header('Location: index.php?controller=charges&action=index');
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
         }
     }
 
+    public function updateBalance(){
+        //calcualte total of charges for current month and minus it from the total income
+        $stmt = $this->db->prepare("SELECT SUM(Montant) AS TotalCharges FROM charges WHERE MONTH(DateCharge) = MONTH(CURRENT_DATE) AND YEAR(DateCharge) = YEAR(CURRENT_DATE)");
+        $stmt->execute();
+        $totalCharges = $stmt->fetch(PDO::FETCH_ASSOC)['TotalCharges'];
+        $stmt = $this->db->prepare("UPDATE portefeuille SET Solde = TotalIncome - :totalCharges WHERE CodePortefeuille = :codePortefeuille");
+        $stmt->execute([
+            ':totalCharges' => $totalCharges,
+            ':codePortefeuille' => $_SESSION['user']['CodePortefeuille']
+        ]);
+    }
+    
     public function delete($id) {
         try {
             $stmt = $this->db->prepare("DELETE FROM charges WHERE CodeCharge = :id");
             $stmt->execute([':id' => $id]);
+            $this->updateBalance();
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
         }
@@ -62,7 +71,6 @@ class ChargesController {
                 header('Location: index.php?controller=charges&action=index');
                 exit();
             }
-            
             require 'View/charges/edit.php';
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
@@ -87,7 +95,7 @@ class ChargesController {
                 ':variable' => $data['Variable'],
                 ':id' => $id
             ]);
-            
+            $this->updateBalance();
             header('Location: index.php?controller=charges&action=index');
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
