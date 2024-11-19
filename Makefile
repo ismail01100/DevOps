@@ -1,10 +1,13 @@
-.PHONY: rebuild down up logs clean test
+.PHONY: rebuild down up logs clean test build
 
 rebuild:
-	docker-compose down
-	sleep 3
+	# docker-compose down
+	# sleep 3
 	docker rm -f $$(docker ps -aq) || true
 	docker-compose -f docker-compose.yml up --build -d
+
+build:
+	docker-compose -f docker-compose.yml build
 
 down:
 	docker-compose down

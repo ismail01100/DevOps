@@ -4,9 +4,11 @@ require_once 'Model/DatabaseConnection.php';
 
 class PortefeuilleController {
     private $db;
+    private $isTestMode;
     
-    public function __construct() {
+    public function __construct($isTestMode = false) {
         $this->db = DatabaseConnection::getInstance()->getConnection();
+        $this->isTestMode = $isTestMode;
     }
 
     public function index() {
@@ -61,20 +63,19 @@ class PortefeuilleController {
     public function updateSalary($data) {
         try {
             if(isset($data['Salaire']) && !empty($data['Salaire'])) {
-                //get old salary
                 $stmt = $this->db->prepare("SELECT Salaire FROM portefeuille WHERE CodePortefeuille = :id");
                 $stmt->execute([':id' => $_SESSION['user']['CodePortefeuille']]);
                 $oldSalaire = $stmt->fetch(PDO::FETCH_ASSOC)['Salaire'];
-                // Update salary
+                
                 $stmt = $this->db->prepare("UPDATE portefeuille SET Salaire = :salaire WHERE CodePortefeuille = :id");
                 $stmt->execute([
                     ':salaire' => $data['Salaire'],
                     ':id' => $_SESSION['user']['CodePortefeuille']
                 ]);
-                // calculate the difference between the old salary and the new salary and update the total income
+
                 if(isset($oldSalaire) && !empty($oldSalaire)){
                     $difference = $data['Salaire'] - $oldSalaire;
-                }else{
+                } else {
                     $difference = $data['Salaire'];
                     $stmt = $this->db->prepare("UPDATE portefeuille SET Solde = :salaire WHERE CodePortefeuille = :id");
                     $stmt->execute([
@@ -82,15 +83,20 @@ class PortefeuilleController {
                         ':id' => $_SESSION['user']['CodePortefeuille']
                     ]);
                 }
+                
                 $stmt = $this->db->prepare("UPDATE portefeuille SET TotalIncome = TotalIncome + :difference WHERE CodePortefeuille = :id");
                 $stmt->execute([
                     ':difference' => $difference,
                     ':id' => $_SESSION['user']['CodePortefeuille']
                 ]);
             }
-            header('Location: index.php?controller=portefeuille&action=index');
+            if (!$this->isTestMode) {
+                header('Location: index.php?controller=portefeuille&action=index');
+            }
+            return true;
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
+            return false;
         }
     }
 
@@ -112,9 +118,13 @@ class PortefeuilleController {
                 ]);
 
             }
-            header('Location: index.php?controller=portefeuille&action=index');
+            if (!$this->isTestMode) {
+                header('Location: index.php?controller=portefeuille&action=index');
+            }
+            return true;
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
+            return false;
         }
     }
 
@@ -128,9 +138,13 @@ class PortefeuilleController {
                 ':salaire' => $salaire,
                 ':id' => $_SESSION['user']['CodePortefeuille']
             ]);
-            header('Location: index.php?controller=portefeuille&action=index');
+            if (!$this->isTestMode) {
+                header('Location: index.php?controller=portefeuille&action=index');
+            }
+            return true;
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
+            return false;
         }
     }
 
@@ -162,9 +176,13 @@ class PortefeuilleController {
                 ':savingPourcentage' => $data['SavingPourcentage'],
                 ':id' => $_SESSION['user']['CodePortefeuille']
             ]);
-            header('Location: index.php?controller=portefeuille&action=index');
+            if (!$this->isTestMode) {
+                header('Location: index.php?controller=portefeuille&action=index');
+            }
+            return true;
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
+            return false;
         }
     }
 

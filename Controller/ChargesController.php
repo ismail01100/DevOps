@@ -4,9 +4,11 @@ require_once 'Model/DatabaseConnection.php';
 
 class ChargesController {
     private $db;
+    private $isTestMode;
     
-    public function __construct() {
+    public function __construct($isTestMode = false) {
         $this->db = DatabaseConnection::getInstance()->getConnection();
+        $this->isTestMode = $isTestMode;
     }
 
     public function index() {
@@ -33,9 +35,13 @@ class ChargesController {
                 ':variable' => $data['Variable']
             ]);
             $this->updateBalance();
-            header('Location: index.php?controller=charges&action=index');
+            if (!$this->isTestMode) {
+                header('Location: index.php?controller=charges&action=index');
+            }
+            return true;
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
+            return false;
         }
     }
 
@@ -56,8 +62,13 @@ class ChargesController {
             $stmt = $this->db->prepare("DELETE FROM charges WHERE CodeCharge = :id");
             $stmt->execute([':id' => $id]);
             $this->updateBalance();
+            if (!$this->isTestMode) {
+                header('Location: index.php?controller=charges&action=index');
+            }
+            return true;
         } catch(PDOException $e) {
             echo "Error: " . $e->getMessage();
+            return false;
         }
     }
 
