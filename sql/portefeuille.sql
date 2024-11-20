@@ -16,7 +16,6 @@ SET time_zone = "+00:00";
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
 /*!40101 SET NAMES utf8mb4 */;
-
 --
 -- Database: `db`
 --
@@ -28,10 +27,10 @@ SET time_zone = "+00:00";
 --
 
 CREATE TABLE `charges` (
-  `CodeCharge` int(11) NOT NULL,
-  `CodePortefeuille` int(11) DEFAULT NULL,
+  `CodeCharge` int(11) NOT NULL, 
+  `CodePortefeuille` int(11)  NOT NULL,
   `NomCharge` varchar(255) NOT NULL,
-  `Description` varchar(255) DEFAULT NULL,
+  `Description` varchar(255) NULL,
   `Montant` float NOT NULL,
   `DateCharge` date NOT NULL,
   `Variable` tinyint(1) NOT NULL
@@ -45,12 +44,12 @@ CREATE TABLE `charges` (
 
 CREATE TABLE `portefeuille` (
   `CodePortefeuille` int(11) NOT NULL,
-  `CodeUtilisateur` int(11) DEFAULT NULL,
-  `Salaire` float DEFAULT NULL,
-  `Solde` float DEFAULT NULL,
+  `CodeUtilisateur` int(11) NOT NULL,
+  `Salaire` float DEFAULT 0 NOT NULL,
+  `Solde` float DEFAULT 0 NOT NULL,
   `LastResetDate` date DEFAULT NULL,
-  `SavingPourcentage` float DEFAULT NULL,
-  `TotalIncome` float DEFAULT NULL
+  `SavingPourcentage` float DEFAULT 0 NOT NULL,
+  `TotalIncome` float DEFAULT 0 NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------

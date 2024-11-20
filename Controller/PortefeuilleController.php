@@ -2,16 +2,19 @@
 require_once 'Model/Portefeuille.php';
 require_once 'Model/DatabaseConnection.php';
 
-class PortefeuilleController {
+class PortefeuilleController
+{
     private $db;
     private $isTestMode;
-    
-    public function __construct($isTestMode = false) {
+
+    public function __construct($isTestMode = false)
+    {
         $this->db = DatabaseConnection::getInstance()->getConnection();
         $this->isTestMode = $isTestMode;
     }
 
-    public function index() {
+    public function index()
+    {
         try {
             $stmt = $this->db->prepare("SELECT * FROM portefeuille WHERE CodeUtilisateur = :userId");
             $stmt->execute([':userId' => $_SESSION['user']['CodeUtilisateur']]);
@@ -19,7 +22,7 @@ class PortefeuilleController {
 
             // Create new portfolio if none exists
             if (!$portefeuille) {
-                $stmt = $this->db->prepare("INSERT INTO portefeuille (CodeUtilisateur, Salaire, Solde) VALUES (:userId, 0, 0)");
+                $stmt = $this->db->prepare("INSERT INTO portefeuille (CodeUtilisateur) VALUES (:userId)");
                 $stmt->execute([':userId' => $_SESSION['user']['CodeUtilisateur']]);
                 // Fetch the newly created portfolio
                 $stmt = $this->db->prepare("SELECT * FROM portefeuille WHERE CodeUtilisateur = :userId");
@@ -35,7 +38,7 @@ class PortefeuilleController {
                 $stmt->execute([':userId' => $_SESSION['user']['CodeUtilisateur']]);
                 $portefeuille = $stmt->fetch(PDO::FETCH_ASSOC);
             }
-            
+
             // Get recent charges
             $stmt = $this->db->prepare("SELECT * FROM charges WHERE CodePortefeuille = :codePortefeuille ORDER BY DateCharge DESC LIMIT 3");
             $stmt->execute([':codePortefeuille' => $portefeuille['CodePortefeuille']]);
@@ -47,33 +50,46 @@ class PortefeuilleController {
             $stmt = $this->db->prepare("SELECT SUM(Montant) AS TotalCharges FROM charges WHERE CodePortefeuille = :codePortefeuille AND DateCharge >= :startDate AND DateCharge <= :endDate");
             $stmt->execute([':codePortefeuille' => $portefeuille['CodePortefeuille'], ':startDate' => $startDate, ':endDate' => $endDate]);
             $totalCharges = $stmt->fetch(PDO::FETCH_ASSOC)['TotalCharges'] ?? 0;
-            
+
             $_SESSION['user']['CodePortefeuille'] = $portefeuille['CodePortefeuille'];
             $_SESSION['user']['SavingPourcentage'] = $portefeuille['SavingPourcentage'];
 
             $withSaving = ($portefeuille['TotalIncome'] * (1 - ($portefeuille['SavingPourcentage'] ?? 0) / 100)) - $totalCharges;
             $savingsWarning = $this->getSavingsWarning($withSaving, $portefeuille);
-            
+            if($portefeuille['Salaire'] == 0){
+                $firstTime = true;
+            }
             require 'View/portefeuille/index.php';
-        } catch(PDOException $e) {
+        } catch (PDOException $e) {
             echo "Error: " . $e->getMessage();
         }
     }
 
-    public function updateSalary($data) {
+    public function settings()
+    {
+        // needs salary , saving pourcentage, last reset date
+        $stmt = $this->db->prepare("SELECT Salaire, SavingPourcentage, LastResetDate FROM portefeuille WHERE CodePortefeuille = :id");
+        $stmt->execute([':id' => $_SESSION['user']['CodePortefeuille']]);
+        $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+        require 'View/portefeuille/settings.php';
+    }
+
+    public function updateSalary($data)
+    {
         try {
-            if(isset($data['Salaire']) && !empty($data['Salaire'])) {
+            if (isset($data['Salaire']) && $data['Salaire'] !== null && $data['Salaire'] >= 0) {
                 $stmt = $this->db->prepare("SELECT Salaire FROM portefeuille WHERE CodePortefeuille = :id");
                 $stmt->execute([':id' => $_SESSION['user']['CodePortefeuille']]);
-                $oldSalaire = $stmt->fetch(PDO::FETCH_ASSOC)['Salaire'];
-                
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $oldSalaire = $result ? $result['Salaire'] : 0;
+
                 $stmt = $this->db->prepare("UPDATE portefeuille SET Salaire = :salaire WHERE CodePortefeuille = :id");
                 $stmt->execute([
                     ':salaire' => $data['Salaire'],
                     ':id' => $_SESSION['user']['CodePortefeuille']
                 ]);
-
-                if(isset($oldSalaire) && !empty($oldSalaire)){
+                $difference = 0;
+                if ($oldSalaire !== null) {
                     $difference = $data['Salaire'] - $oldSalaire;
                 } else {
                     $difference = $data['Salaire'];
@@ -83,7 +99,7 @@ class PortefeuilleController {
                         ':id' => $_SESSION['user']['CodePortefeuille']
                     ]);
                 }
-                
+
                 $stmt = $this->db->prepare("UPDATE portefeuille SET TotalIncome = TotalIncome + :difference WHERE CodePortefeuille = :id");
                 $stmt->execute([
                     ':difference' => $difference,
@@ -94,15 +110,19 @@ class PortefeuilleController {
                 header('Location: index.php?controller=portefeuille&action=index');
             }
             return true;
-        } catch(PDOException $e) {
+        } catch (PDOException $e) {
             echo "Error: " . $e->getMessage();
             return false;
         }
     }
 
-    public function addIncome($data) {
+    public function addIncome($data)
+    {
+        if($data['Bonus'] <= 0){
+            return false;
+        }
         try {
-            if(isset($data['Bonus']) && !empty($data['Bonus'])) {
+            if (isset($data['Bonus']) && !empty($data['Bonus'])) {
                 $stmt = $this->db->prepare("SELECT TotalIncome, Solde FROM portefeuille WHERE CodePortefeuille = :id");
                 $stmt->execute([':id' => $_SESSION['user']['CodePortefeuille']]);
                 $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -122,13 +142,14 @@ class PortefeuilleController {
                 header('Location: index.php?controller=portefeuille&action=index');
             }
             return true;
-        } catch(PDOException $e) {
+        } catch (PDOException $e) {
             echo "Error: " . $e->getMessage();
             return false;
         }
     }
 
-    public function resetBalance() {
+    public function resetBalance()
+    {
         try {
             $stmt = $this->db->prepare("SELECT Salaire FROM portefeuille WHERE CodePortefeuille = :id");
             $stmt->execute([':id' => $_SESSION['user']['CodePortefeuille']]);
@@ -142,13 +163,14 @@ class PortefeuilleController {
                 header('Location: index.php?controller=portefeuille&action=index');
             }
             return true;
-        } catch(PDOException $e) {
+        } catch (PDOException $e) {
             echo "Error: " . $e->getMessage();
             return false;
         }
     }
 
-    private function checkAndResetBalance($portefeuille) {
+    public function checkAndResetBalance($portefeuille)
+    {
         // Get the last reset date from the database or session
         $stmt = $this->db->prepare("SELECT LastResetDate FROM portefeuille WHERE CodePortefeuille = :id");
         $stmt->execute([':id' => $portefeuille['CodePortefeuille']]);
@@ -156,7 +178,7 @@ class PortefeuilleController {
 
         $today = new DateTime();
         $firstDayOfMonth = new DateTime('first day of this month');
-        
+
         // If last reset date is null or from previous month, perform reset
         if (!$lastResetDate || (new DateTime($lastResetDate))->format('Y-m') < $today->format('Y-m')) {
             $stmt = $this->db->prepare("UPDATE portefeuille SET Solde = Salaire, TotalIncome = Salaire, LastResetDate = :today WHERE CodePortefeuille = :id");
@@ -169,7 +191,11 @@ class PortefeuilleController {
         return false;
     }
 
-    public function updateSavingPourcentage($data) {
+    public function updateSavingPourcentage($data)
+    {
+        if($data['SavingPourcentage'] < 0 || $data['SavingPourcentage'] > 100){
+            return false;
+        }
         try {
             $stmt = $this->db->prepare("UPDATE portefeuille SET SavingPourcentage = :savingPourcentage WHERE CodePortefeuille = :id");
             $stmt->execute([
@@ -180,57 +206,14 @@ class PortefeuilleController {
                 header('Location: index.php?controller=portefeuille&action=index');
             }
             return true;
-        } catch(PDOException $e) {
+        } catch (PDOException $e) {
             echo "Error: " . $e->getMessage();
             return false;
         }
     }
 
-    public function calculateBudgetAndExpenses($portefeuille) {
-        // Get total income (salary + bonuses)
-        $totalIncome = $portefeuille['Solde'];
-        
-        // Calculate available budget (80% of income)
-        $availableBudget = $totalIncome * (1 - ($portefeuille['SavingPourcentage'] / 100));
-        
-        // Get fixed and variable charges
-        $stmt = $this->db->prepare("
-            SELECT 
-                SUM(CASE WHEN Variable = 0 THEN Montant ELSE 0 END) as fixed_charges,
-                SUM(CASE WHEN Variable = 1 THEN Montant ELSE 0 END) as variable_charges
-            FROM charges 
-            WHERE CodePortefeuille = :codePortefeuille 
-            AND MONTH(DateCharge) = MONTH(CURRENT_DATE())
-            AND YEAR(DateCharge) = YEAR(CURRENT_DATE())
-        ");
-        
-        $stmt->execute([':codePortefeuille' => $portefeuille['CodePortefeuille']]);
-        $charges = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        return [
-            'availableBudget' => $availableBudget,
-            'fixedCharges' => $charges['fixed_charges'] ?? 0,
-            'variableCharges' => $charges['variable_charges'] ?? 0
-        ];
-    }
-
-    public function calculateSuggestedReduction($budget, $fixedCharges, $variableCharges) {
-        $totalCharges = $fixedCharges + $variableCharges;
-        
-        if ($totalCharges <= $budget) {
-            return 0; // No reduction needed
-        }
-        
-        // Calculate how much we need to reduce
-        $excess = $totalCharges - $budget;
-        
-        // Calculate reduction percentage needed on variable charges
-        $reductionPercentage = ($excess / $variableCharges) * 100;
-        
-        return ceil($reductionPercentage); // Round up to nearest integer
-    }
-
-    public function getSavingsWarning($withSaving, $portefeuille) {
+    public function getSavingsWarning($withSaving, $portefeuille)
+    {
         if ($withSaving >= 0) {
             return null;
         }
@@ -255,10 +238,10 @@ class PortefeuilleController {
             AND MONTH(c1.DateCharge) = MONTH(CURRENT_DATE())
             AND YEAR(c1.DateCharge) = YEAR(CURRENT_DATE())
         ");
-        
+
         $stmt->execute([':codePortefeuille' => $portefeuille['CodePortefeuille']]);
         $variableCharges = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         if (empty($variableCharges)) {
             return ['hasVariableCharges' => false];
         }
@@ -271,7 +254,7 @@ class PortefeuilleController {
         foreach ($variableCharges as $charge) {
             $currentAmount = $charge['CurrentMontant'];
             $historicalMin = $charge['HistoricalMin'] ?? $currentAmount;
-            
+
             $totalCurrentCharges += $currentAmount;
             $totalAfterHistoricalMin += $historicalMin;
 

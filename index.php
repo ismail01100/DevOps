@@ -17,57 +17,62 @@ if (($controller == 'charges' || $controller == 'portefeuille') && !isset($_SESS
 }
 
 // Route to appropriate controller
-switch($controller) {
+switch ($controller) {
     case 'user':
         $controller = new UserController();
-        if($action == 'login') {
-            if(isset($_SESSION['user']['CodeUtilisateur'])) {
+        if ($action == 'login') {
+            if (isset($_SESSION['user']['CodeUtilisateur'])) {
                 header('Location: index.php?controller=portefeuille&action=index');
                 exit();
             }
-            if($_SERVER['REQUEST_METHOD'] == 'POST') {
+            if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $controller->login($_POST['email'], $_POST['password']);
             } else {
                 require 'View/user/login.php';
             }
-        } elseif($action == 'register') {
-            if($_SERVER['REQUEST_METHOD'] == 'POST') {
+        } elseif ($action == 'register') {
+            if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $controller->register($_POST);
             } else {
                 require 'View/user/register.php';
             }
-        } elseif($action == 'logout') {
+        } elseif ($action == 'logout') {
             $controller->logout();
         }
         break;
-        
+
     case 'charges':
         $controller = new ChargesController();
-        if($action == 'index') {
+        if ($action == 'index') {
             $controller->index();
-        } elseif($action == 'create') {
-            if($_SERVER['REQUEST_METHOD'] == 'POST') {
-                $controller->create($_POST);
-            } else {
-                require 'View/charges/add.php';
+        } elseif ($action == 'create') {
+            $controller->create($_POST);
+        } elseif ($action == 'delete') {
+            $controller->delete($_POST);
+        } elseif ($action == 'edit') {
+            $controller->edit($_GET['id']);
+        } elseif ($action == 'update') {
+            if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                $controller->update($_POST);
             }
-        }
-         elseif($action == 'delete') {
-            $controller->delete($_GET['id']);
+        } elseif ($action == 'get') {
+            $controller->get($_GET['id']);
         }
         break;
-        
+
     case 'portefeuille':
         $controller = new PortefeuilleController();
-        if($action == 'index') {
+        if ($action == 'index') {
             $controller->index();
-        } elseif($action == 'updateSalary' && $_SERVER['REQUEST_METHOD'] == 'POST') {
+        } elseif ($action == 'settings') {
+            $controller->settings();
+        } elseif ($action == 'updateSalary' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $controller->updateSalary($_POST);
-        } elseif($action == 'addIncome' && $_SERVER['REQUEST_METHOD'] == 'POST') {
+        } elseif ($action == 'addIncome' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $controller->addIncome($_POST);
-        } elseif($action == 'resetBalance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
-            $controller->resetBalance($_POST);
-        } elseif($action == 'updateSavingPourcentage' && $_SERVER['REQUEST_METHOD'] == 'POST') {
+        } elseif ($action == 'resetBalance' && $_SERVER['REQUEST_METHOD'] == 'POST') {
+            $controller->resetBalance();
+        } elseif ($action == 'updateSavingPourcentage' && $_SERVER['REQUEST_METHOD'] == 'POST') {
             $controller->updateSavingPourcentage($_POST);
         }
         break;

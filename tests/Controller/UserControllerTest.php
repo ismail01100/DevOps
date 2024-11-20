@@ -14,16 +14,9 @@ class UserControllerTest extends TestCase
     
     protected function setUp(): void
     {
-        // Get test database connection
         $this->db = DatabaseConnection::getInstance()->getConnection();
         $this->userController = new UserController(true);
-        
-        // Disable foreign key checks, truncate tables, then re-enable checks
-        $this->db->exec('SET FOREIGN_KEY_CHECKS = 0');
-        $this->db->exec('TRUNCATE TABLE portefeuille');
-        $this->db->exec('TRUNCATE TABLE charges');
-        $this->db->exec('TRUNCATE TABLE users');
-        $this->db->exec('SET FOREIGN_KEY_CHECKS = 1');
+        $this->cleanDatabase();
     }
 
     public function testSuccessfulRegistration()
@@ -113,16 +106,168 @@ class UserControllerTest extends TestCase
         $this->assertEquals("Email and password are required", $_SESSION['error']);
     }
 
-    protected function tearDown(): void
+    public function testRegistrationWithExistingEmail()
     {
-        // Clean up after each test
+        // First registration
+        $testData = [
+            'Fullname' => 'Test User',
+            'Email' => 'test@example.com',
+            'Password' => 'password123'
+        ];
+        $this->userController->register($testData);
+
+        // Second registration with same email
+        $testData['Fullname'] = 'Different User';
+        ob_start();
+        $result = $this->userController->register($testData);
+        ob_end_clean();
+
+        $this->assertFalse($result);
+        $this->assertEquals("Email already exists", $_SESSION['error']);
+    }
+
+    public function testRegistrationWithSQLInjection()
+    {
+        // Test different SQL injection attack vectors
+        $maliciousData = [
+            [
+                'Fullname' => "Robert'; DROP TABLE users; --",  // Attempt to drop table
+                'Email' => "normal@email.com",
+                'Password' => "password123",
+                'description' => "Classic SQL injection with table drop attempt"
+            ],
+            [
+                'Fullname' => "Normal Name",
+                'Email' => "attacker@evil.com' OR '1'='1",  // Always true condition
+                'Password' => "password123",
+                'description' => "UNION-based SQL injection attempt"
+            ],
+            [
+                'Fullname' => "Normal Name",
+                'Email' => "normal@email.com",
+                'Password' => "password123'; DELETE FROM users; --",  // Attempt to delete records
+                'description' => "Deletion attempt through password field"
+            ]
+        ];
+
+        foreach ($maliciousData as $testCase) {
+            ob_start();
+            $this->userController->register([
+                'Fullname' => $testCase['Fullname'],
+                'Email' => $testCase['Email'],
+                'Password' => $testCase['Password']
+            ]);
+            ob_end_clean();
+
+            // After each injection attempt, verify database integrity
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM users");
+            $stmt->execute();
+            $count = $stmt->fetchColumn();
+            
+            $this->assertEquals(1, $count, "Database should remain intact after injection attempt: " . $testCase['description']);
+        }
+    }
+
+    public function testLoginWithSQLInjection()
+    {
+        // Create legitimate user first
+        $this->createTestUser();
+
+        $maliciousInputs = [
+            ["' OR '1'='1", "anything"],
+            ["admin'--", "anything"],
+            ["' UNION SELECT 'admin','admin','admin' FROM users --", "anything"],
+            ["test@example.com' AND 1=1--", "anything"],
+            ["test@example.com'; DROP TABLE users; --", "password123"]
+        ];
+
+        foreach ($maliciousInputs as $input) {
+            ob_start();
+            $result = $this->userController->login($input[0], $input[1]);
+            ob_end_clean();
+
+            $this->assertFalse($result, "SQL Injection attempt should fail: " . $input[0]);
+            $this->assertArrayNotHasKey('user', $_SESSION);
+        }
+
+        // Verify database integrity
+        $stmt = $this->db->prepare("SELECT COUNT(*) FROM users");
+        $stmt->execute();
+        $count = $stmt->fetchColumn();
+        $this->assertEquals(1, $count, "Database should remain intact after injection attempts");
+    }
+
+    public function testPasswordComplexity()
+    {
+        $weakPasswords = [
+            ['password' => '123', 'expected' => 'Password must be at least 8 characters'],
+            ['password' => 'password', 'expected' => 'Password must contain at least one number'],
+            ['password' => '12345678', 'expected' => 'Password must contain at least one letter'],
+        ];
+
+        foreach ($weakPasswords as $test) {
+            $testData = [
+                'Fullname' => 'Test User',
+                'Email' => 'test@example.com',
+                'Password' => $test['password']
+            ];
+
+            ob_start();
+            $result = $this->userController->register($testData);
+            ob_end_clean();
+
+            $this->assertFalse($result);
+            $this->assertEquals($test['expected'], $_SESSION['error']);
+        }
+    }
+
+    public function testEmailValidation()
+    {
+        $invalidEmails = [
+            'notanemail',
+            'still@not@anemail',
+            '@nocontent.com',
+            'spaces in@email.com',
+            'missing.domain@',
+            '.starting.dot@domain.com',
+            'ending.dot.@domain.com',
+            'double..dot@domain.com'
+        ];
+
+        foreach ($invalidEmails as $email) {
+            $testData = [
+                'Fullname' => 'Test User',
+                'Email' => $email,
+                'Password' => 'password123'
+            ];
+
+            ob_start();
+            $result = $this->userController->register($testData);
+            ob_end_clean();
+
+            $this->assertFalse($result);
+            $this->assertEquals("Invalid email format", $_SESSION['error']);
+        }
+    }
+
+    private function createTestUser(): void
+    {
+        $stmt = $this->db->prepare("INSERT INTO users (Fullname, Email, Password) VALUES (?, ?, ?)");
+        $stmt->execute(['Test User', 'test@example.com', password_hash('password123', PASSWORD_DEFAULT)]);
+    }
+
+    private function cleanDatabase(): void
+    {
         $this->db->exec('SET FOREIGN_KEY_CHECKS = 0');
         $this->db->exec('TRUNCATE TABLE portefeuille');
         $this->db->exec('TRUNCATE TABLE charges');
         $this->db->exec('TRUNCATE TABLE users');
         $this->db->exec('SET FOREIGN_KEY_CHECKS = 1');
-        
-        // Clear session data
+    }
+
+    protected function tearDown(): void
+    {
+        $this->cleanDatabase();
         $_SESSION = [];
     }
 }

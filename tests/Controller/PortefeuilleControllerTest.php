@@ -2,128 +2,150 @@
 
 namespace Tests\Controller;
 
+use DatabaseConnection;
+use PDO;
 use PHPUnit\Framework\TestCase;
 use PortefeuilleController;
-use PDO;
-use DatabaseConnection;
+use DateTime;
 
 class PortefeuilleControllerTest extends TestCase
 {
     private $portefeuilleController;
     private $db;
     private $testPortefeuilleId;
-    
+    private $testUserId;
+
     protected function setUp(): void
     {
-        // Get test database connection
         $this->db = DatabaseConnection::getInstance()->getConnection();
         $this->portefeuilleController = new PortefeuilleController(true);
         
-        // Disable foreign key checks, truncate tables, then re-enable checks
-        $this->db->exec('SET FOREIGN_KEY_CHECKS = 0');
-        $this->db->exec('TRUNCATE TABLE charges');
-        $this->db->exec('TRUNCATE TABLE portefeuille');
-        $this->db->exec('TRUNCATE TABLE users');
-        $this->db->exec('SET FOREIGN_KEY_CHECKS = 1');
+        // Clean up and prepare database
+        $this->cleanDatabase();
         
-        // Create test user and portfolio
+        // Create test user
         $stmt = $this->db->prepare("INSERT INTO users (Fullname, Email, Password) VALUES (?, ?, ?)");
         $stmt->execute(['Test User', 'test@example.com', password_hash('password123', PASSWORD_DEFAULT)]);
-        $userId = $this->db->lastInsertId();
+        $this->testUserId = $this->db->lastInsertId();
         
-        $stmt = $this->db->prepare("INSERT INTO portefeuille (CodeUtilisateur, Salaire, Solde, TotalIncome) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$userId, 5000, 5000, 5000]);
+        // Create test portfolio
+        $stmt = $this->db->prepare("INSERT INTO portefeuille (CodeUtilisateur, Salaire, Solde, TotalIncome, SavingPourcentage) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$this->testUserId, 5000, 5000, 5000, 10]);
         $this->testPortefeuilleId = $this->db->lastInsertId();
         
-        // Set up session data
+        // Set up session
         $_SESSION['user'] = [
-            'CodeUtilisateur' => $userId,
+            'CodeUtilisateur' => $this->testUserId,
             'CodePortefeuille' => $this->testPortefeuilleId
         ];
     }
 
-    public function testUpdateSalary()
+    public function testSalaryManagement()
     {
-        $newSalary = 6000;
-        $testData = ['Salaire' => $newSalary];
+        try {
+            // Test updating salary to valid amount
+            $this->portefeuilleController->updateSalary(['Salaire' => 6000]);
+            $result = $this->getPortefeuilleData();
+            $this->assertEquals(6000, $result['Salaire']);
+            $this->assertEquals(6000, $result['TotalIncome']);
 
-        ob_start();
-        $this->portefeuilleController->updateSalary($testData);
-        ob_end_clean();
+            // Test updating salary to zero
+            $this->portefeuilleController->updateSalary(['Salaire' => 0]);
+            $result = $this->getPortefeuilleData();
+            $this->assertEquals(0, $result['Salaire']);
+            $this->assertEquals(0, $result['TotalIncome']);
 
-        // Verify salary was updated
-        $stmt = $this->db->prepare("SELECT Salaire, TotalIncome FROM portefeuille WHERE CodePortefeuille = ?");
-        $stmt->execute([$this->testPortefeuilleId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Test updating salary with negative value (should be rejected)
+            $this->portefeuilleController->updateSalary(['Salaire' => -1000]);
+            $result = $this->getPortefeuilleData();
+            $this->assertEquals(0, $result['Salaire']);
 
-        $this->assertEquals($newSalary, $result['Salaire']);
-        $this->assertEquals(6000, $result['TotalIncome']); // Initial 5000 + 1000 difference
+            // Test updating salary with null value (should maintain previous value)
+            $this->portefeuilleController->updateSalary(['Salaire' => null]);
+            $result = $this->getPortefeuilleData();
+            $this->assertEquals(0, $result['Salaire']);
+        } catch (\PDOException $e) {
+            $this->fail('Failed in testSalaryManagement: ' . $e->getMessage());
+        }
     }
 
-    public function testAddIncome()
+    public function testIncomeManagement()
     {
-        $bonus = 1000;
-        $testData = ['Bonus' => $bonus];
+        // Test adding valid bonus
+        $this->portefeuilleController->addIncome(['Bonus' => 1000]);
+        $result = $this->getPortefeuilleData();
+        $this->assertEquals(6000, $result['Solde']); // 5000 + 1000
+        $this->assertEquals(6000, $result['TotalIncome']);
 
-        ob_start();
-        $this->portefeuilleController->addIncome($testData);
-        ob_end_clean();
-
-        // Verify income was added
-        $stmt = $this->db->prepare("SELECT Solde, TotalIncome FROM portefeuille WHERE CodePortefeuille = ?");
-        $stmt->execute([$this->testPortefeuilleId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        $this->assertEquals(6000, $result['Solde']); // Initial 5000 + 1000 bonus
-        $this->assertEquals(6000, $result['TotalIncome']); // Initial 5000 + 1000 bonus
+        // Test adding negative bonus (should be rejected)
+        $this->portefeuilleController->addIncome(['Bonus' => -500]);
+        $result = $this->getPortefeuilleData();
+        $this->assertEquals(6000, $result['Solde']); // Should remain unchanged
+        
+        // Test adding zero bonus
+        $this->portefeuilleController->addIncome(['Bonus' => 0]);
+        $result = $this->getPortefeuilleData();
+        $this->assertEquals(6000, $result['Solde']); // Should remain unchanged
     }
 
-    public function testUpdateSavingPourcentage()
+    public function testSavingPourcentageManagement()
     {
-        $newPercentage = 20;
-        $testData = ['SavingPourcentage' => $newPercentage];
+        // Test updating saving percentage
+        $this->portefeuilleController->updateSavingPourcentage(['SavingPourcentage' => 20]);
+        $result = $this->getPortefeuilleData();
+        $this->assertEquals(20, $result['SavingPourcentage']);
 
-        ob_start();
-        $this->portefeuilleController->updateSavingPourcentage($testData);
-        ob_end_clean();
+        // Test invalid percentage (negative)
+        $this->portefeuilleController->updateSavingPourcentage(['SavingPourcentage' => -10]);
+        $result = $this->getPortefeuilleData();
+        $this->assertEquals(20, $result['SavingPourcentage']); // Should remain unchanged
 
-        // Verify saving percentage was updated
-        $stmt = $this->db->prepare("SELECT SavingPourcentage FROM portefeuille WHERE CodePortefeuille = ?");
-        $stmt->execute([$this->testPortefeuilleId]);
-        $result = $stmt->fetchColumn();
-
-        $this->assertEquals($newPercentage, $result);
+        // Test percentage > 100
+        $this->portefeuilleController->updateSavingPourcentage(['SavingPourcentage' => 150]);
+        $result = $this->getPortefeuilleData();
+        $this->assertEquals(20, $result['SavingPourcentage']); // Should remain unchanged
     }
 
-    public function testResetBalance()
+    public function testBalanceReset()
     {
-        // First modify the balance
-        $stmt = $this->db->prepare("UPDATE portefeuille SET Solde = ?, TotalIncome = ? WHERE CodePortefeuille = ?");
-        $stmt->execute([7000, 7000, $this->testPortefeuilleId]);
+        // Test initial reset
+        $portefeuille = [
+            'CodePortefeuille' => $this->testPortefeuilleId,
+            'Salaire' => 5000
+        ];
+        
+        $wasReset = $this->portefeuilleController->checkAndResetBalance($portefeuille);
+        $this->assertTrue($wasReset);
+        
+        $result = $this->getPortefeuilleData();
+        $this->assertEquals(5000, $result['Solde']);
+        $this->assertEquals(5000, $result['TotalIncome']);
+        $this->assertEquals((new DateTime())->format('Y-m-d'), $result['LastResetDate']);
 
-        ob_start();
-        $this->portefeuilleController->resetBalance();
-        ob_end_clean();
-
-        // Verify balance was reset to salary amount
-        $stmt = $this->db->prepare("SELECT Salaire, Solde, TotalIncome FROM portefeuille WHERE CodePortefeuille = ?");
-        $stmt->execute([$this->testPortefeuilleId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        $this->assertEquals($result['Salaire'], $result['Solde']);
-        $this->assertEquals($result['Salaire'], $result['TotalIncome']);
+        // Test no reset needed (same day)
+        $wasReset = $this->portefeuilleController->checkAndResetBalance($portefeuille);
+        $this->assertFalse($wasReset);
     }
 
-    protected function tearDown(): void
+    private function getPortefeuilleData(): array
     {
-        // Clean up after each test
+        $stmt = $this->db->prepare("SELECT * FROM portefeuille WHERE CodePortefeuille = ?");
+        $stmt->execute([$this->testPortefeuilleId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    private function cleanDatabase(): void
+    {
         $this->db->exec('SET FOREIGN_KEY_CHECKS = 0');
         $this->db->exec('TRUNCATE TABLE charges');
         $this->db->exec('TRUNCATE TABLE portefeuille');
         $this->db->exec('TRUNCATE TABLE users');
         $this->db->exec('SET FOREIGN_KEY_CHECKS = 1');
-        
-        // Clear session data
+    }
+
+    protected function tearDown(): void
+    {
+        $this->cleanDatabase();
         $_SESSION = [];
     }
 }
