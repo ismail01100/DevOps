@@ -16,5 +16,10 @@ mysql -h db -u root -prootpassword -e "
 # Import schema to test database
 mysql -h db -u user -ppassword test_db < /var/www/html/sql/portefeuille.sql
 
+# Install Composer dependencies if they're not already installed
+if [ ! -d "vendor" ]; then
+    composer install
+fi
+
 # Run PHPUnit tests
-./vendor/bin/phpunit --colors=always
+./vendor/bin/phpunit --colors=always 

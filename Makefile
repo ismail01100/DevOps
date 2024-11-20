@@ -1,9 +1,8 @@
 .PHONY: rebuild down up logs clean test build
 
 rebuild:
-	# docker-compose down
-	# sleep 3
 	docker rm -f $$(docker ps -aq) || true
+	docker volume rm $$(docker volume ls -q --filter name=mysql_data) || true
 	docker-compose -f docker-compose.yml up --build -d
 
 build:
@@ -11,6 +10,11 @@ build:
 
 down:
 	docker-compose down
+
+fresh:
+	docker-compose down
+	docker volume rm $$(docker volume ls -q --filter name=mysql_data) || true
+	docker-compose -f docker-compose.yml up --build -d
 
 up:
 	docker-compose -f docker-compose.yml up -d
@@ -21,7 +25,8 @@ logs:
 clean:
 	docker-compose down
 	docker rm -f $$(docker ps -aq) || true
+	docker volume rm $$(docker volume ls -q --filter name=mysql_data) || true
 	docker system prune -af
 
 test:
-	docker-compose -f docker-compose.yml run --rm test
+	docker-compose -f docker-compose.yml run --rm -T test

@@ -3,3 +3,4 @@
 .env
 .phpunit.result.cache
 *.log
+.idea/

@@ -25,7 +25,7 @@ services:
       DB_HOST: db
       DB_USER: user
       DB_PASSWORD: password
-      DB_NAME: test_db      
+      DB_NAME: test_db
     command: ["./run-tests.sh"]
 
   db:
